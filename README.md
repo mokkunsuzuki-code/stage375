@@ -121,3 +121,23 @@ Stage375 does not publish:
 ## License
 
 MIT License.
+
+## Current Verified State
+
+Stage375 completed real ML-DSA-65 signing and verification.
+
+Current result:
+
+- `decision: quantum_safe_dual_signature_verified`
+- `sigstore_signature_verified: true`
+- `rekor_inclusion_verified: true`
+- `mldsa_signature_verified: true`
+- `dual_signature_target_matches: true`
+- `pqc_downgrade_prevented: true`
+- GitHub Actions run: `29327350883`
+- OpenSSL version: `3.5.7`
+- ML-DSA signature size: `3309 bytes`
+
+The Stage374 Sigstore/Rekor signature and the Stage375 ML-DSA-65 signature target the same Stage373 attestation blob.
+
+The ML-DSA private key was not published.

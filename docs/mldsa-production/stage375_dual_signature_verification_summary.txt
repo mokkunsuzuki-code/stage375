@@ -2,16 +2,16 @@ Stage375: Production ML-DSA-65
 Dual-Signature Verification
 and Downgrade Prevention Gate
 
-Decision: mldsa_execution_pending
+Decision: quantum_safe_dual_signature_verified
 Sigstore Signature Verified: True
 Rekor Inclusion Verified: True
-ML-DSA-65 Signature Verified: False
-Dual-Signature Target Matches: False
-PQC Downgrade Prevented: False
-Result SHA256: 2d1ac3940e1231366c95695566a190b7928b3b464761f557ca5e63064adf39c2
+ML-DSA-65 Signature Verified: True
+Dual-Signature Target Matches: True
+PQC Downgrade Prevented: True
+Result SHA256: fb0a43e582e5e581ddbf06d2ad2636bdafd8a944bc74d049bf4e072db50d918c
 
 Reasons:
-- github_actions_mldsa_execution_pending
+- sigstore_rekor_and_mldsa65_same_target_verified
 
 Meaning:
 Stage375 verifies a real ML-DSA-65 signature for the same Stage373 blob already verified through Sigstore/Rekor.

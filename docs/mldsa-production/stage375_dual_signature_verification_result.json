@@ -1,7 +1,7 @@
 {
   "stage": 375,
   "engine": "Production ML-DSA-65 Dual-Signature Verification and Downgrade Prevention Gate",
-  "created_at": "2026-07-14T10:48:28.317748+00:00",
+  "created_at": "2026-07-14T11:05:06.504659+00:00",
   "source_stage": 374,
   "previous_hash": "a9bb9a971dc638579bcdd8b4d1f2b529ac5a1d6a6936548715be4ab1cf896173",
   "stage374_external_transparency_bound": true,
@@ -9,15 +9,15 @@
   "attestation_sha256": "d54b7524ced420f664da9d370985585d649ce80584b64bdf87342f89dbfde89f",
   "algorithm": "ML-DSA-65",
   "fips_standard": "FIPS 204",
-  "decision": "mldsa_execution_pending",
+  "decision": "quantum_safe_dual_signature_verified",
   "sigstore_signature_verified": true,
   "rekor_inclusion_verified": true,
-  "mldsa_signature_verified": false,
-  "dual_signature_target_matches": false,
+  "mldsa_signature_verified": true,
+  "dual_signature_target_matches": true,
   "pqc_required": true,
-  "pqc_downgrade_prevented": false,
+  "pqc_downgrade_prevented": true,
   "reasons": [
-    "github_actions_mldsa_execution_pending"
+    "sigstore_rekor_and_mldsa65_same_target_verified"
   ],
   "checks": {
     "stage374_result_present": true,
@@ -33,12 +33,12 @@
     "logical_attestation_sha256_matches": true,
     "public_key_present": true,
     "public_key_pem_sha256_matches": true,
-    "signature_present": false,
-    "signature_sha256_valid": false,
+    "signature_present": true,
+    "signature_sha256_valid": true,
     "mldsa_receipt_present": true,
-    "mldsa_signature_verified": false,
-    "sigstore_and_mldsa_target_match": false,
-    "dual_signature_complete": false,
+    "mldsa_signature_verified": true,
+    "sigstore_and_mldsa_target_match": true,
+    "dual_signature_complete": true,
     "private_key_marker_detected": false,
     "forbidden_public_file_detected": false,
     "pqc_required": true,
@@ -69,5 +69,5 @@
       "It does not change Stage372 timestamp final acceptance."
     ]
   },
-  "result_sha256": "2d1ac3940e1231366c95695566a190b7928b3b464761f557ca5e63064adf39c2"
+  "result_sha256": "fb0a43e582e5e581ddbf06d2ad2636bdafd8a944bc74d049bf4e072db50d918c"
 }
