@@ -162,3 +162,11 @@ openssl-install/
 !.github/
 !.github/workflows/
 !.github/workflows/stage375-production-mldsa.yml
+
+# Stage375 public ML-DSA verification key
+!docs/mldsa-production/
+!docs/mldsa-production/stage375_mldsa65_public_key.pem
+
+!docs/
+!docs/mldsa-production/
+!docs/mldsa-production/stage375_mldsa65_public_key.pem
