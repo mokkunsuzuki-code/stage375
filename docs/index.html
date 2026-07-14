@@ -1948,8 +1948,8 @@ fetch("./docs/stage335/watch-summary.json")
   <ul>
     <li>No ML-DSA private key is published.</li>
     <li>No ML-DSA seed is published.</li>
-    <li>The private key is stored only as an encrypted GitHub secret.</li>
-    <li>The private key is deleted before artifact upload.</li>
+    <li>The production workflow uses an encrypted GitHub Actions secret. A local development copy of the private key may exist outside the public repository.</li>
+    <li>The temporary private key created inside the GitHub Actions runner is deleted before artifact upload.</li>
     <li>The public key and signature may be published.</li>
     <li>No raw QKD key material is published.</li>
     <li>No OIDC or GitHub token is published.</li>

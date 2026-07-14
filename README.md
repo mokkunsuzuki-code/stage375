@@ -80,9 +80,9 @@ The ML-DSA private key:
 - is created locally
 - remains under `private/stage375-mldsa/`
 - is excluded by `.gitignore`
-- is uploaded only to an encrypted GitHub Actions secret
-- is reconstructed only inside the runner
-- is deleted before artifact upload
+- is excluded from Git and may remain in the local private directory; the production workflow receives a copy through an encrypted GitHub Actions secret
+- is reconstructed temporarily inside the GitHub Actions runner
+- has its temporary runner copy deleted before artifact upload
 - is never published in GitHub Pages or the repository
 
 The public key and ML-DSA signature may be public.
@@ -140,4 +140,4 @@ Current result:
 
 The Stage374 Sigstore/Rekor signature and the Stage375 ML-DSA-65 signature target the same Stage373 attestation blob.
 
-The ML-DSA private key was not published.
+The ML-DSA private key was not published. A local development copy may remain under the Git-ignored `private/stage375-mldsa/` directory, while the production workflow uses an encrypted GitHub Actions secret.
