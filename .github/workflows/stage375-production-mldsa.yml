@@ -1,0 +1,473 @@
+name: Stage375 Production ML-DSA-65 Verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mldsa-sign-and-verify:
+    runs-on: ubuntu-latest
+
+    env:
+      OPENSSL_VERSION: "3.5.7"
+      OPENSSL_TAG: "openssl-3.5.7"
+      TARGET_FILE: docs/final-acceptance-attestation/stage373_final_acceptance_attestation.json
+      EXPECTED_BLOB_SHA256: 6ecf58d0070d8db920744b7d32331e01e8e1aef2eded02dde428b80def79d5e6
+      EXPECTED_ATTESTATION_SHA256: d54b7524ced420f664da9d370985585d649ce80584b64bdf87342f89dbfde89f
+      EXPECTED_SIGSTORE_TARGET_SHA256: 6ecf58d0070d8db920744b7d32331e01e8e1aef2eded02dde428b80def79d5e6
+      CONTEXT_STRING: QSP-Stage375-v1
+
+    steps:
+      - name: Checkout Stage375
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Prepare private build directories
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p \
+            private/stage375-mldsa \
+            private/openssl-source \
+            private/openssl-install \
+            private/stage375-output
+
+      - name: Fetch pinned OpenSSL source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git clone \
+            --depth 1 \
+            --branch "${OPENSSL_TAG}" \
+            https://github.com/openssl/openssl.git \
+            private/openssl-source
+
+          git -C private/openssl-source rev-parse HEAD \
+            > private/stage375-output/openssl-source-commit.txt
+
+      - name: Build OpenSSL 3.5.7
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd private/openssl-source
+
+          ./Configure \
+            --prefix="${GITHUB_WORKSPACE}/private/openssl-install" \
+            --openssldir="${GITHUB_WORKSPACE}/private/openssl-install/ssl" \
+            no-shared
+
+          make -j2
+          make install_sw
+
+      - name: Verify OpenSSL ML-DSA support
+        id: openssl
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OPENSSL_BIN="${GITHUB_WORKSPACE}/private/openssl-install/bin/openssl"
+
+          "${OPENSSL_BIN}" version \
+            > private/stage375-output/openssl-version.txt
+
+          "${OPENSSL_BIN}" list -signature-algorithms \
+            | grep -i "ML-DSA-65"
+
+          OPENSSL_BINARY_SHA256="$(
+            sha256sum "${OPENSSL_BIN}" | awk '{print $1}'
+          )"
+
+          echo "binary_sha256=${OPENSSL_BINARY_SHA256}" \
+            >> "${GITHUB_OUTPUT}"
+
+      - name: Verify target hashes
+        id: target
+        shell: python
+        run: |
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["TARGET_FILE"])
+          raw = path.read_bytes()
+          data = json.loads(raw.decode("utf-8"))
+
+          declared = data.get("attestation_sha256")
+
+          canonical_data = dict(data)
+          canonical_data.pop("attestation_sha256", None)
+
+          canonical = json.dumps(
+              canonical_data,
+              ensure_ascii=False,
+              sort_keys=True,
+              indent=2,
+          ).encode("utf-8")
+
+          logical = hashlib.sha256(
+              canonical
+          ).hexdigest()
+
+          blob = hashlib.sha256(raw).hexdigest()
+
+          if blob != os.environ["EXPECTED_BLOB_SHA256"]:
+              raise SystemExit(
+                  "Target blob SHA256 mismatch."
+              )
+
+          if (
+              declared
+              != os.environ[
+                  "EXPECTED_ATTESTATION_SHA256"
+              ]
+          ):
+              raise SystemExit(
+                  "Declared attestation SHA256 mismatch."
+              )
+
+          if (
+              logical
+              != os.environ[
+                  "EXPECTED_ATTESTATION_SHA256"
+              ]
+          ):
+              raise SystemExit(
+                  "Logical attestation SHA256 mismatch."
+              )
+
+          if (
+              blob
+              != os.environ[
+                  "EXPECTED_SIGSTORE_TARGET_SHA256"
+              ]
+          ):
+              raise SystemExit(
+                  "ML-DSA target differs from "
+                  "Stage374 Sigstore target."
+              )
+
+          with Path(
+              os.environ["GITHUB_OUTPUT"]
+          ).open("a", encoding="utf-8") as f:
+              f.write(
+                  f"blob_sha256={blob}\n"
+              )
+              f.write(
+                  f"attestation_sha256={logical}\n"
+              )
+
+      - name: Restore ML-DSA private key
+        shell: bash
+        env:
+          MLDSA_PRIVATE_KEY_B64: ${{ secrets.STAGE375_MLDSA65_PRIVATE_KEY_B64 }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${MLDSA_PRIVATE_KEY_B64:-}" ]; then
+            echo "Required ML-DSA private-key secret is missing."
+            exit 1
+          fi
+
+          printf '%s' "${MLDSA_PRIVATE_KEY_B64}" \
+            | base64 --decode \
+            > private/stage375-mldsa/stage375_mldsa65_private.pem
+
+          chmod 600 \
+            private/stage375-mldsa/stage375_mldsa65_private.pem
+
+      - name: Confirm private key matches public key
+        id: key
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OPENSSL_BIN="${GITHUB_WORKSPACE}/private/openssl-install/bin/openssl"
+          PRIVATE_KEY="private/stage375-mldsa/stage375_mldsa65_private.pem"
+          PUBLIC_KEY="docs/mldsa-production/stage375_mldsa65_public_key.pem"
+          DER_FROM_PRIVATE="private/stage375-mldsa/public-from-private.der"
+          DER_FROM_PUBLIC="private/stage375-mldsa/public-from-repository.der"
+
+          "${OPENSSL_BIN}" pkey \
+            -in "${PRIVATE_KEY}" \
+            -pubout \
+            -outform DER \
+            -out "${DER_FROM_PRIVATE}"
+
+          "${OPENSSL_BIN}" pkey \
+            -pubin \
+            -in "${PUBLIC_KEY}" \
+            -outform DER \
+            -out "${DER_FROM_PUBLIC}"
+
+          cmp \
+            "${DER_FROM_PRIVATE}" \
+            "${DER_FROM_PUBLIC}"
+
+          PUBLIC_PEM_SHA256="$(
+            sha256sum "${PUBLIC_KEY}" | awk '{print $1}'
+          )"
+
+          PUBLIC_DER_SHA256="$(
+            sha256sum "${DER_FROM_PUBLIC}" | awk '{print $1}'
+          )"
+
+          echo "public_pem_sha256=${PUBLIC_PEM_SHA256}" \
+            >> "${GITHUB_OUTPUT}"
+
+          echo "public_der_sha256=${PUBLIC_DER_SHA256}" \
+            >> "${GITHUB_OUTPUT}"
+
+      - name: Sign Stage373 attestation with ML-DSA-65
+        id: sign
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OPENSSL_BIN="${GITHUB_WORKSPACE}/private/openssl-install/bin/openssl"
+          PRIVATE_KEY="private/stage375-mldsa/stage375_mldsa65_private.pem"
+          SIGNATURE="private/stage375-output/stage375_mldsa65_signature.bin"
+
+          set +e
+
+          "${OPENSSL_BIN}" pkeyutl \
+            -sign \
+            -in "${TARGET_FILE}" \
+            -inkey "${PRIVATE_KEY}" \
+            -out "${SIGNATURE}" \
+            -pkeyopt "context-string:${CONTEXT_STRING}"
+
+          SIGN_EXIT_CODE=$?
+
+          set -e
+
+          echo "exit_code=${SIGN_EXIT_CODE}" \
+            >> "${GITHUB_OUTPUT}"
+
+          if [ "${SIGN_EXIT_CODE}" -ne 0 ]; then
+            exit "${SIGN_EXIT_CODE}"
+          fi
+
+          test -s "${SIGNATURE}"
+
+      - name: Verify ML-DSA-65 signature
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OPENSSL_BIN="${GITHUB_WORKSPACE}/private/openssl-install/bin/openssl"
+          PUBLIC_KEY="docs/mldsa-production/stage375_mldsa65_public_key.pem"
+          SIGNATURE="private/stage375-output/stage375_mldsa65_signature.bin"
+          VERIFY_OUTPUT="private/stage375-output/verify-output.txt"
+
+          set +e
+
+          "${OPENSSL_BIN}" pkeyutl \
+            -verify \
+            -in "${TARGET_FILE}" \
+            -pubin \
+            -inkey "${PUBLIC_KEY}" \
+            -sigfile "${SIGNATURE}" \
+            -pkeyopt "context-string:${CONTEXT_STRING}" \
+            > "${VERIFY_OUTPUT}" \
+            2>&1
+
+          VERIFY_EXIT_CODE=$?
+
+          set -e
+
+          echo "exit_code=${VERIFY_EXIT_CODE}" \
+            >> "${GITHUB_OUTPUT}"
+
+          if [ "${VERIFY_EXIT_CODE}" -ne 0 ]; then
+            cat "${VERIFY_OUTPUT}"
+            exit "${VERIFY_EXIT_CODE}"
+          fi
+
+      - name: Build safe ML-DSA receipt
+        shell: python
+        env:
+          TARGET_BLOB_SHA256: ${{ steps.target.outputs.blob_sha256 }}
+          ATTESTATION_SHA256: ${{ steps.target.outputs.attestation_sha256 }}
+          OPENSSL_BINARY_SHA256: ${{ steps.openssl.outputs.binary_sha256 }}
+          PUBLIC_KEY_PEM_SHA256: ${{ steps.key.outputs.public_pem_sha256 }}
+          PUBLIC_KEY_DER_SHA256: ${{ steps.key.outputs.public_der_sha256 }}
+          SIGN_EXIT_CODE: ${{ steps.sign.outputs.exit_code }}
+          VERIFY_EXIT_CODE: ${{ steps.verify.outputs.exit_code }}
+        run: |
+          import hashlib
+          import json
+          import os
+          import re
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          output_dir = Path(
+              "private/stage375-output"
+          )
+
+          signature = (
+              output_dir
+              / "stage375_mldsa65_signature.bin"
+          )
+
+          version_text = (
+              output_dir
+              / "openssl-version.txt"
+          ).read_text(
+              encoding="utf-8",
+              errors="replace",
+          ).strip()
+
+          source_commit = (
+              output_dir
+              / "openssl-source-commit.txt"
+          ).read_text(
+              encoding="utf-8",
+          ).strip()
+
+          signature_bytes = signature.read_bytes()
+
+          receipt = {
+              "stage": 375,
+              "receipt_type":
+                  "mldsa65_execution_receipt",
+              "created_at": datetime.now(
+                  timezone.utc
+              ).isoformat(),
+              "source_stage": 374,
+              "execution_status": "verified",
+              "execution_mode":
+                  "github_actions_secret_key",
+              "github_repository":
+                  os.environ["GITHUB_REPOSITORY"],
+              "github_run_id":
+                  os.environ["GITHUB_RUN_ID"],
+              "github_run_attempt":
+                  os.environ["GITHUB_RUN_ATTEMPT"],
+              "github_sha":
+                  os.environ["GITHUB_SHA"],
+              "github_ref":
+                  os.environ["GITHUB_REF"],
+              "workflow_file":
+                  ".github/workflows/"
+                  "stage375-production-mldsa.yml",
+              "algorithm": "ML-DSA-65",
+              "fips_standard": "FIPS 204",
+              "security_category": 3,
+              "context_string":
+                  os.environ["CONTEXT_STRING"],
+              "openssl_version": version_text,
+              "openssl_source_tag":
+                  os.environ["OPENSSL_TAG"],
+              "openssl_source_commit":
+                  source_commit,
+              "openssl_binary_sha256":
+                  os.environ[
+                      "OPENSSL_BINARY_SHA256"
+                  ],
+              "target_blob_sha256":
+                  os.environ[
+                      "TARGET_BLOB_SHA256"
+                  ],
+              "attestation_sha256":
+                  os.environ[
+                      "ATTESTATION_SHA256"
+                  ],
+              "stage374_sigstore_target_sha256":
+                  os.environ[
+                      "EXPECTED_SIGSTORE_TARGET_SHA256"
+                  ],
+              "public_key_pem_sha256":
+                  os.environ[
+                      "PUBLIC_KEY_PEM_SHA256"
+                  ],
+              "public_key_der_sha256":
+                  os.environ[
+                      "PUBLIC_KEY_DER_SHA256"
+                  ],
+              "signature_sha256":
+                  hashlib.sha256(
+                      signature_bytes
+                  ).hexdigest(),
+              "signature_size_bytes":
+                  len(signature_bytes),
+              "sign_exit_code":
+                  int(os.environ["SIGN_EXIT_CODE"]),
+              "verify_exit_code":
+                  int(os.environ["VERIFY_EXIT_CODE"]),
+              "signature_generated": True,
+              "signature_verified": True,
+              "same_target_as_sigstore": (
+                  os.environ[
+                      "TARGET_BLOB_SHA256"
+                  ]
+                  == os.environ[
+                      "EXPECTED_SIGSTORE_TARGET_SHA256"
+                  ]
+              ),
+              "private_key_published": False,
+              "private_key_source":
+                  "encrypted_github_actions_secret",
+              "fips_204_algorithm_conformance":
+                  True,
+              "fips_140_module_validation_claimed":
+                  False
+          }
+
+          (
+              output_dir
+              / "stage375_mldsa65_execution_receipt.json"
+          ).write_text(
+              json.dumps(
+                  receipt,
+                  ensure_ascii=False,
+                  indent=2,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+
+      - name: Remove private key and temporary data
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -f \
+            private/stage375-mldsa/stage375_mldsa65_private.pem \
+            private/stage375-mldsa/public-from-private.der \
+            private/stage375-mldsa/public-from-repository.der \
+            private/stage375-output/verify-output.txt
+
+      - name: Confirm private key is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if find private/stage375-output \
+            -type f \
+            -exec grep -Il \
+              "BEGIN PRIVATE KEY" {} \; \
+            | grep -q .; then
+            echo "Private key marker detected in public output."
+            exit 1
+          fi
+
+      - name: Upload Stage375 public evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage375-mldsa65-verification
+          path: |
+            private/stage375-output/stage375_mldsa65_signature.bin
+            private/stage375-output/stage375_mldsa65_execution_receipt.json
+          if-no-files-found: error
+          retention-days: 30

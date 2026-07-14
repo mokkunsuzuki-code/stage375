@@ -1,0 +1,18 @@
+Stage375: Production ML-DSA-65
+Dual-Signature Verification
+and Downgrade Prevention Gate
+
+Decision: mldsa_execution_pending
+Sigstore Signature Verified: True
+Rekor Inclusion Verified: True
+ML-DSA-65 Signature Verified: False
+Dual-Signature Target Matches: False
+PQC Downgrade Prevented: False
+Result SHA256: 2d1ac3940e1231366c95695566a190b7928b3b464761f557ca5e63064adf39c2
+
+Reasons:
+- github_actions_mldsa_execution_pending
+
+Meaning:
+Stage375 verifies a real ML-DSA-65 signature for the same Stage373 blob already verified through Sigstore/Rekor.
+Until the GitHub Actions ML-DSA receipt is imported, the correct state is mldsa_execution_pending.
